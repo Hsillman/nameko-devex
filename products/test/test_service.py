@@ -14,6 +14,13 @@ def service_container(test_config, container_factory):
     container.start()
     return container
 
+def test_delete_product(create_product, service_container, redis_client):
+    stored_product = create_product()
+    with entrypoint_hook(service_container, 'delete') as delete:
+        delete(stored_product['id'])
+
+    deleted_product = redis_client.hgetall('products:{}'.format(stored_product['id']))
+    assert not deleted_product
 
 def test_get_product(create_product, service_container):
 

@@ -18,6 +18,20 @@ def test_get_fails_on_not_found(storage):
         storage.get(2)
     assert 'Product ID 2 does not exist' == exc.value.args[0]
 
+def test_delete(storage, create_product, redis_client):
+    create_product(id=1, title='LZ 127', in_stock=10)
+    create_product(id=2, title='LZ 129', in_stock=11)
+    create_product(id=3, title='LZ 130', in_stock=12)
+
+    storage.delete(2)
+
+    product_one, product_two, product_three = [
+        redis_client.hgetall('products:{}'.format(id_))
+        for id_ in (1, 2, 3)]
+    assert b'10' == product_one[b'in_stock']
+    assert b'12' == product_three[b'in_stock']
+
+    assert product_two == {} or product_two == None
 
 def test_get(storage, products):
     product = storage.get('LZ129')

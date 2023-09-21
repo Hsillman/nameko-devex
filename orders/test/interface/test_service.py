@@ -33,6 +33,26 @@ def test_get_order(orders_rpc, order):
     response = orders_rpc.get_order(1)
     assert response['id'] == order.id
 
+@pytest.mark.usefixtures('db_session','order_details')
+def test_list_orders(orders_rpc):
+    orders = orders_rpc.list_orders()
+    details = [
+        {
+            'price': '99.51',
+            'id': 1,
+            'product_id': 'the_odyssey',
+            'quantity': 1
+         },
+         {
+            'price': '30.99',
+            'id': 2,
+            'product_id': 'the_enigma',
+            'quantity': 8
+        }
+    ]
+    assert isinstance(orders, list)
+    assert len(orders) == 1
+    assert orders[0]['order_details'] == details
 
 @pytest.mark.usefixtures('db_session')
 def test_will_raise_when_order_not_found(orders_rpc):

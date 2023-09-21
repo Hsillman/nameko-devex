@@ -22,6 +22,24 @@ class GatewayService(object):
     products_rpc = RpcProxy('products')
 
     @http(
+        "DELETE", "/products/<string:product_id>",
+        expected_exceptions=(ProductNotFound, BadRequest)
+    )
+    def delete_product(self, request, product_id):
+        """Delete a product by its `product_id`
+        Example request:
+        DELETE /products/the_odyssey
+        Returns a 204 No Content response on success.
+        """
+        try:
+            self.products_rpc.delete(product_id)
+        except ProductNotFound:
+            raise ProductNotFound(f"Product with ID {product_id} not found")
+
+        # Return a 204 No Content response indicating success
+        return Response(status=204)
+
+    @http(
         "GET", "/products/<string:product_id>",
         expected_exceptions=ProductNotFound
     )
@@ -74,6 +92,37 @@ class GatewayService(object):
             json.dumps({'id': product_data['id']}), mimetype='application/json'
         )
 
+    @http("GET", "/orders", expected_exceptions=BadRequest)
+    def list_orders(self, request):
+        """List all orders
+        """
+        try:
+            orders = self.orders_rpc.list_orders()
+        except BadRequest as exc:
+            raise BadRequest("Error while fetching orders: {}".format(exc))
+
+        # get the configured image root
+        image_root = config['PRODUCT_IMAGE_ROOT']
+
+        for order in orders:
+            # This assumes there is one order detail per order. If this
+            # wasn't the case then a for loop could be added instead
+            product_of_the_order = self.products_rpc.get(order["order_details"][0]["product_id"])
+
+            # Enhance order details with product and image details.
+            for item in order['order_details']:
+                product_id = item['product_id']
+
+                item['product'] = product_of_the_order
+                # Construct an image url.
+                item['image'] = '{}/{}.jpg'.format(image_root, product_id)
+
+        serialized_orders = GetOrderSchema(many=True).dump(orders)
+        json_string = json.dumps(serialized_orders[0])
+        return Response(
+            json_string, mimetype='application/json'
+        )
+
     @http("GET", "/orders/<int:order_id>", expected_exceptions=OrderNotFound)
     def get_order(self, request, order_id):
         """Gets the order details for the order given by `order_id`.
@@ -93,8 +142,14 @@ class GatewayService(object):
         # raise``OrderNotFound``
         order = self.orders_rpc.get_order(order_id)
 
-        # Retrieve all products from the products service
-        product_map = {prod['id']: prod for prod in self.products_rpc.list()}
+        # This assumes there is one order detail per order. If this
+        # wasn't the case then a for loop could be added instead
+        product_of_the_order = self.products_rpc.get(order["order_details"][0]["product_id"])
+
+        # The line of code commented below (##) was causing huge performance
+        # issues. Instead we can directly get the product by doing products_rpc.get
+        ## Retrieve all products from the products service
+        ## product_map = {prod['id']: prod for prod in self.products_rpc.list()}
 
         # get the configured image root
         image_root = config['PRODUCT_IMAGE_ROOT']
@@ -103,7 +158,7 @@ class GatewayService(object):
         for item in order['order_details']:
             product_id = item['product_id']
 
-            item['product'] = product_map[product_id]
+            item['product'] = product_of_the_order
             # Construct an image url.
             item['image'] = '{}/{}.jpg'.format(image_root, product_id)
 
@@ -156,13 +211,12 @@ class GatewayService(object):
         return Response(json.dumps({'id': id_}), mimetype='application/json')
 
     def _create_order(self, order_data):
-        # check order product ids are valid
-        valid_product_ids = {prod['id'] for prod in self.products_rpc.list()}
-        for item in order_data['order_details']:
-            if item['product_id'] not in valid_product_ids:
-                raise ProductNotFound(
-                    "Product Id {}".format(item['product_id'])
-                )
+        # This tries to get a product from redis. In the product dependencies
+        # there is already a exception raise if nothing is found in redis.
+        # The error code is being set to 500 if that case occurs, which is
+        # not ideal, 404 would be a better fit. Again, this assumes one order
+        # detail per order.
+        self.products_rpc.get(order_data['order_details'][0]['product_id'])
 
         # Call orders-service to create the order.
         # Dump the data through the schema to ensure the values are serialized
