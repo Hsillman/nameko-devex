@@ -92,6 +92,35 @@ class GatewayService(object):
             json.dumps({'id': product_data['id']}), mimetype='application/json'
         )
 
+    @http("GET", "/orders", expected_exceptions=BadRequest)
+    def list_orders(self, request):
+        """List all orders
+        """
+        try:
+            orders = self.orders_rpc.list_orders()
+        except BadRequest as exc:
+            raise BadRequest("Error while fetching orders: {}".format(exc))
+
+        # get the configured image root
+        image_root = config['PRODUCT_IMAGE_ROOT']
+
+        for order in orders:
+            product_of_the_order = self.products_rpc.get(order["order_details"][0]["product_id"])
+
+            # Enhance order details with product and image details.
+            for item in order['order_details']:
+                product_id = item['product_id']
+
+                item['product'] = product_of_the_order
+                # Construct an image url.
+                item['image'] = '{}/{}.jpg'.format(image_root, product_id)
+
+        serialized_orders = GetOrderSchema(many=True).dump(orders)
+        json_string = json.dumps(serialized_orders[0])
+        return Response(
+            json_string, mimetype='application/json'
+        )
+
     @http("GET", "/orders/<int:order_id>", expected_exceptions=OrderNotFound)
     def get_order(self, request, order_id):
         """Gets the order details for the order given by `order_id`.
