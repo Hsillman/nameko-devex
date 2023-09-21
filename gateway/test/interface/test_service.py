@@ -94,6 +94,67 @@ class TestCreateProduct(object):
         assert response.status_code == 400
         assert response.json()['error'] == 'VALIDATION_ERROR'
 
+class TestListOrders(object):
+    def test_can_list_orders(self, gateway_service, web_session):
+        # Setup mock orders-service response
+        gateway_service.orders_rpc.list_orders.return_value = [
+            {
+                'id': 1,
+                'order_details': [
+                    {
+                        'id': 1,
+                        'quantity': 2,
+                        'product_id': 'the_odyssey',
+                        'price': '200.00'
+                    }
+                ]
+            },
+            {
+                'id': 2,
+                'order_details': [
+                    {
+                        'id': 3,
+                        'quantity': 3,
+                        'product_id': 'the_odyssey',
+                        'price': '300.00'
+                    }
+                ]
+            }
+        ]
+
+        gateway_service.products_rpc.get.return_value = {
+            "in_stock": 10,
+            "maximum_speed": 5,
+            "id": "the_odyssey",
+            "passenger_capacity": 101,
+            "title": "The Odyssey"
+            }
+
+        # Call the gateway service to list orders
+        response = web_session.get('/orders')
+        assert response.status_code == 200
+
+        # Check if the product will come as part of the order
+        for order in response.json():
+            # Assumes one order detail per order.
+            order_details = order['order_details'][0]
+            assert len(order_details['product']) > 0
+
+        # Check dependencies called as expected
+        assert [call()] == gateway_service.orders_rpc.list_orders.call_args_list
+        assert [call("the_odyssey"), call("the_odyssey")] == gateway_service.products_rpc.get.call_args_list
+
+    def test_list_orders_empty(self, gateway_service, web_session):
+        # Setup mock orders-service response for an empty list
+        gateway_service.orders_rpc.list_orders.return_value = []
+
+        # Call the gateway service to list orders
+        response = web_session.get('/orders')
+        assert response.status_code == 200
+        assert response.json() == []
+
+        # Check dependencies called as expected
+        assert [call()] == gateway_service.orders_rpc.list_orders.call_args_list
 
 class TestGetOrder(object):
 
