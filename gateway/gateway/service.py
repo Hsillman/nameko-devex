@@ -22,6 +22,24 @@ class GatewayService(object):
     products_rpc = RpcProxy('products')
 
     @http(
+        "DELETE", "/products/<string:product_id>",
+        expected_exceptions=(ProductNotFound, BadRequest)
+    )
+    def delete_product(self, request, product_id):
+        """Delete a product by its `product_id`
+        Example request:
+        DELETE /products/the_odyssey
+        Returns a 204 No Content response on success.
+        """
+        try:
+            self.products_rpc.delete(product_id)
+        except ProductNotFound:
+            raise ProductNotFound(f"Product with ID {product_id} not found")
+
+        # Return a 204 No Content response indicating success
+        return Response(status=204)
+
+    @http(
         "GET", "/products/<string:product_id>",
         expected_exceptions=ProductNotFound
     )

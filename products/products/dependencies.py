@@ -36,6 +36,12 @@ class StorageWrapper:
             'in_stock': int(document[b'in_stock'])
         }
 
+    def delete(self, product_id):
+        key = self._format_key(product_id)
+        if not self.client.exists(key):
+            raise NotFound('Product ID {} does not exist'.format(product_id))
+        self.client.delete(key)
+
     def get(self, product_id):
         product = self.client.hgetall(self._format_key(product_id))
         if not product:
