@@ -105,6 +105,8 @@ class GatewayService(object):
         image_root = config['PRODUCT_IMAGE_ROOT']
 
         for order in orders:
+            # This assumes there is one order detail per order. If this
+            # wasn't the case then a for loop could be added instead
             product_of_the_order = self.products_rpc.get(order["order_details"][0]["product_id"])
 
             # Enhance order details with product and image details.
