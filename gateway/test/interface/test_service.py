@@ -4,6 +4,20 @@ from mock import call
 
 from gateway.exceptions import OrderNotFound, ProductNotFound
 
+class TestDeleteProduct(object):
+    def test_can_delete_product(self, gateway_service, web_session):
+        # Mock the delete RPC call in gateway_service
+        gateway_service.products_rpc.delete.return_value = {}
+
+        # Call the delete endpoint
+        response = web_session.delete('/products/the_odyssey')
+
+        # Assert the response and verify the RPC call
+        assert response.status_code == 204
+        assert response.content == b''
+        assert gateway_service.products_rpc.delete.call_args_list == [
+            call("the_odyssey")
+        ]
 
 class TestGetProduct(object):
     def test_can_get_product(self, gateway_service, web_session):
