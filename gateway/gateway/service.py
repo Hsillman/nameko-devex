@@ -142,8 +142,14 @@ class GatewayService(object):
         # raise``OrderNotFound``
         order = self.orders_rpc.get_order(order_id)
 
-        # Retrieve all products from the products service
-        product_map = {prod['id']: prod for prod in self.products_rpc.list()}
+        # This assumes there is one order detail per order. If this
+        # wasn't the case then a for loop could be added instead
+        product_of_the_order = self.products_rpc.get(order["order_details"][0]["product_id"])
+
+        # The line of code commented below (##) was causing huge performance
+        # issues. Instead we can directly get the product by doing products_rpc.get
+        ## Retrieve all products from the products service
+        ## product_map = {prod['id']: prod for prod in self.products_rpc.list()}
 
         # get the configured image root
         image_root = config['PRODUCT_IMAGE_ROOT']
@@ -152,7 +158,7 @@ class GatewayService(object):
         for item in order['order_details']:
             product_id = item['product_id']
 
-            item['product'] = product_map[product_id]
+            item['product'] = product_of_the_order
             # Construct an image url.
             item['image'] = '{}/{}.jpg'.format(image_root, product_id)
 
@@ -205,13 +211,12 @@ class GatewayService(object):
         return Response(json.dumps({'id': id_}), mimetype='application/json')
 
     def _create_order(self, order_data):
-        # check order product ids are valid
-        valid_product_ids = {prod['id'] for prod in self.products_rpc.list()}
-        for item in order_data['order_details']:
-            if item['product_id'] not in valid_product_ids:
-                raise ProductNotFound(
-                    "Product Id {}".format(item['product_id'])
-                )
+        # This tries to get a product from redis. In the product dependencies
+        # there is already a exception raise if nothing is found in redis.
+        # The error code is being set to 500 if that case occurs, which is
+        # not ideal, 404 would be a better fit. Again, this assumes one order
+        # detail per order.
+        self.products_rpc.get(order_data['order_details'][0]['product_id'])
 
         # Call orders-service to create the order.
         # Dump the data through the schema to ensure the values are serialized
